@@ -4,6 +4,14 @@ const { GoogleGenAI } = require('@google/genai');
 const FormData = require('form-data');
 
 const app = express();
+
+process.on('uncaughtException', (err) => {
+    console.error('Erro não tratado:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Rejeição não tratada:', reason);
+});
+
 app.use(express.json({ limit: '50mb' }));
 
 // Configuração de CORS para evitar qualquer bloqueio
@@ -141,7 +149,7 @@ async function processarPedidoComIA(textoCliente) {
 }
 
 app.get('/health', (req, res) => {
-    res.status(200).send({ status: 'online' });
+    res.status(200).json({ status: 'online', timestamp: new Date() });
 });
 
 
