@@ -50,7 +50,7 @@
 
         // Conecta ao Stream em Tempo Real (SSE) do Backend
         // const evtSource = new EventSource('/api/stream-pedidos');
-        const evtSource = new EventSource('https://webhook.infosystem.pro/api/stream-pedidos');
+        const evtSource = new EventSource('https://pedepelozap.infosystem.pro/api/stream-pedidos');
 
         evtSource.onopen = () => {
             statusConexao.className = "inline-block w-3 h-3 bg-green-500 rounded-full animate-pulse";

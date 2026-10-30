@@ -1,5 +1,5 @@
 {
-  "name": "zimpre-clone-backend",
+  "name": "pedepelozap-backend",
   "version": "1.0.0",
   "description": "Backend para capturar webhooks da Evolution API",
   "main": "index.js",
