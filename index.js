@@ -152,7 +152,6 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'online', timestamp: new Date() });
 });
 
-
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor rodando na porta ${PORT}`);
 });
