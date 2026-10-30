@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Pedidos - Cozinha</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilo exclusivo para impressão em impressora térmica (58mm / 80mm) */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .ticket-impressao, .ticket-impressao * {
+                visibility: visible;
+            }
+            .ticket-impressao {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white;
+                color: black;
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-6">
+
+    <header class="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
+        <h1 class="text-2xl font-bold flex items-center gap-2">
+            🍔 <span class="text-orange-500">Zimpre</span> - Painel da Cozinha
+        </h1>
+        <div class="flex items-center gap-3">
+            <span id="status-conexao" class="inline-block w-3 h-3 bg-red-500 rounded-full"></span>
+            <span id="status-texto" class="text-sm text-gray-400">Conectando...</span>
+        </div>
+    </header>
+
+    <!-- Grid de Pedidos -->
+    <main id="pedidos-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Os pedidos chegam aqui em tempo real -->
+    </main>
+
+    <script>
+        const container = document.getElementById('pedidos-container');
+        const statusConexao = document.getElementById('status-conexao');
+        const statusTexto = document.getElementById('status-texto');
+
+        // Conecta ao Stream em Tempo Real (SSE) do Backend
+        const evtSource = new EventSource('/api/stream-pedidos');
+
+        evtSource.onopen = () => {
+            statusConexao.className = "inline-block w-3 h-3 bg-green-500 rounded-full animate-pulse";
+            statusTexto.innerText = "Sistema Conectado";
+        };
+
+        evtSource.onerror = () => {
+            statusConexao.className = "inline-block w-3 h-3 bg-red-500 rounded-full";
+            statusTexto.innerText = "Reconectando...";
+        };
+
+        evtSource.onmessage = (event) => {
+            const pedido = JSON.parse(event.data);
+            adicionarCardPedido(pedido);
+        };
+
+        function adicionarCardPedido(pedido) {
+            // Remove mensagem de "vazio" se houver
+            const cardId = 'pedido-' + Date.now();
+            
+            let itensHtml = '';
+            if (pedido.itens && Array.isArray(pedido.itens)) {
+                itensHtml = pedido.itens.map(item => `
+                    <li class="flex justify-between border-b border-gray-700/50 py-1">
+                        <span><b>${item.quantidade}x</b> ${item.produto}</span>
+                        <span class="text-gray-400 text-xs italic">${item.observacao || ''}</span>
+                    </li>
+                `).join('');
+            }
+
+            const cardHTML = `
+                <div id="${cardId}" class="ticket-impressao bg-gray-800 border border-gray-700 rounded-xl p-5 shadow-lg flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-start mb-3">
+                            <h3 class="font-bold text-lg text-orange-400">${pedido.cliente_nome || 'Cliente WhatsApp'}</h3>
+                            <span class="bg-orange-500/20 text-orange-400 text-xs px-2.5 py-1 rounded-full font-medium uppercase">${pedido.tipo_pedido || 'delivery'}</span>
+                        </div>
+                        
+                        <div class="text-sm text-gray-300 mb-4 space-y-1">
+                            <p>📍 ${pedido.endereco_entrega || 'Retirada no balcão'}</p>
+                            <p>💳 Pagamento: <span class="text-white font-semibold">${pedido.forma_pagamento || 'Não informado'}</span> ${pedido.troco_para ? `(Troco para: R$ ${pedido.troco_para})` : ''}</p>
+                        </div>
+
+                        <div class="border-t border-gray-700 pt-3 mb-4">
+                            <p class="text-xs text-gray-400 uppercase font-bold mb-2">Itens do Pedido:</p>
+                            <ul class="space-y-2 text-sm">
+                                ${itensHtml}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 mt-4 no-print">
+                        <button onclick="window.print()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm font-medium transition">
+                            🖨️ Imprimir
+                        </button>
+                        <button onclick="document.getElementById('${cardId}').remove()" class="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg text-sm font-medium transition">
+                            ✅ Concluir
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            container.insertAdjacentHTML('afterbegin', cardHTML);
+        }
+    </script>
+</body>
+</html>
