@@ -14,6 +14,9 @@ process.on('unhandledRejection', (reason, promise) => {
 
 app.use(express.json({ limit: '50mb' }));
 
+// Servir arquivos estáticos da pasta public (Painel da Cozinha)
+app.use(express.static('public'));
+
 // Configuração de CORS para evitar qualquer bloqueio
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -155,5 +158,3 @@ app.get('/health', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor rodando na porta ${PORT}`);
 });
-
-app.use(express.static('public'));
