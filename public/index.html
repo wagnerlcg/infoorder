@@ -94,29 +94,71 @@
         };
 
         evtSource.onmessage = function (event) {
-            // Se a mensagem for apenas um ping de segurança, ignorar
-            if (event.data.trim() === 'ping') return;
+            // Ignora os pings de manutenção do Easypanel/Nginx para não quebrar o JSON
+            if (event.data.includes('ping')) return;
 
-            const pedido = JSON.parse(event.data);
+            try {
+                const pedido = JSON.parse(event.data);
+                console.log("Chegou na cozinha:", pedido);
 
-            // Construir o HTML dos itens garantindo a leitura de pedido.itens
-            let itensHTML = '';
-            if (pedido.itens && pedido.itens.length > 0) {
-                pedido.itens.forEach(item => {
-                    itensHTML += `
-                <div class="mb-2">
-                    <span class="font-bold text-orange-400">${item.quantidade || 1}x</span> 
-                    <span class="text-white ml-1">${item.produto}</span>
-                    ${item.observacao ? `<div class="text-sm text-gray-400 ml-6">- ${item.observacao}</div>` : ''}
+                // Monta o bloco HTML varrendo exatamente o array "itens" gerado pela IA
+                let itensHTML = '';
+                if (pedido.itens && pedido.itens.length > 0) {
+                    pedido.itens.forEach(item => {
+                        itensHTML += `
+                    <div class="mb-2">
+                        <span class="font-bold text-orange-400">${item.quantidade}x</span> 
+                        <span class="text-white ml-1">${item.produto}</span>
+                        ${item.observacao ? `<div class="text-sm text-gray-400 ml-5">- ${item.observacao}</div>` : ''}
+                    </div>
+                `;
+                    });
+                } else {
+                    itensHTML = '<div class="text-sm text-gray-500 italic">Nenhum item identificado.</div>';
+                }
+
+                // Aqui você cria o layout do cartão e injeta o itensHTML
+                // Exemplo da estrutura do seu card:
+                const cardHTML = `
+            <div class="bg-gray-800 border border-gray-700 p-4 rounded-lg shadow-lg">
+                <div class="flex justify-between items-start mb-3 border-b border-gray-700 pb-2">
+                    <h3 class="text-orange-400 font-bold text-lg">${pedido.cliente_nome || 'Cliente WhatsApp'}</h3>
+                    <span class="bg-gray-700 text-xs px-2 py-1 rounded text-gray-300 font-bold tracking-wide">
+                        ${(pedido.tipo_pedido || 'DELIVERY').toUpperCase()}
+                    </span>
                 </div>
-            `;
-                });
-            } else {
-                itensHTML = '<p class="text-sm text-gray-500 italic">Nenhum item identificado pela IA.</p>';
-            }
+                
+                <div class="mb-4 text-sm text-gray-300">
+                    <div class="mb-1">📍 ${pedido.endereco_entrega || 'Retirada no balcão'}</div>
+                    <div>💳 Pagamento: <span class="font-bold text-white">${pedido.forma_pagamento || 'Não informado'}</span></div>
+                    ${pedido.troco_para ? `<div class="text-orange-300">Troco para: ${pedido.troco_para}</div>` : ''}
+                </div>
 
-            // Inserir o cartão no painel
-            // ... (o seu código existente que cria a div do cartão e injeta a variável itensHTML na secção "ITENS DO PEDIDO:")
+                <div class="mb-2 text-xs font-bold text-gray-500 tracking-wider">ITENS DO PEDIDO:</div>
+                <div class="mb-6">
+                    ${itensHTML} <!-- Aqui os itens do x-bacon são injetados -->
+                </div>
+
+                <div class="flex gap-2">
+                    <button class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded text-sm transition-colors">
+                        🖨️ Imprimir
+                    </button>
+                    <button class="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded text-sm transition-colors" onclick="this.parentElement.parentElement.remove()">
+                        ✅ Concluir
+                    </button>
+                </div>
+            </div>
+        `;
+
+                // Joga o cartão finalizado para dentro do container principal da tela
+                const container = document.getElementById('pedidos-container'); // Ajuste para o ID da sua div principal
+                if (container) {
+                    container.insertAdjacentHTML('afterbegin', cardHTML);
+                }
+
+            } catch (error) {
+                console.error("Erro ao montar o cartão na tela:", error);
+            }
         };
     </script>
 </body>
