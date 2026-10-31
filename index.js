@@ -62,6 +62,7 @@ function enviarParaCozinha(pedido) {
 
 // Webhook do WhatsApp
 app.post('/webhook/whatsapp', async (req, res) => {
+    console.log("🔔 [WEBHOOK RECEBIDO] Evento:", req.body?.event, "| Tem Base64?", !!(req.body?.base64 || req.body?.data?.base64 || req.body?.data?.message?.base64));
     try {
         const data = req.body;
 
