@@ -147,10 +147,12 @@ async function processarPedidoComIA(textoCliente, tentativasMaximas = 3) {
         Mensagem do cliente: "${textoCliente}"
     `;
 
+    // ... dentro da função processarPedidoComIA ...
+
     for (let tentativa = 1; tentativa <= tentativasMaximas; tentativa++) {
         try {
             const response = await ai.models.generateContent({
-                model: 'gemini-3.8-pro',
+                model: 'gemini-3.8-flash', // Volte para o flash, que é o modelo correto
                 contents: prompt,
                 config: { responseMimeType: 'application/json' }
             });
@@ -159,13 +161,12 @@ async function processarPedidoComIA(textoCliente, tentativasMaximas = 3) {
         } catch (error) {
             console.error(`Erro no Gemini (Tentativa ${tentativa}/${tentativasMaximas}):`, error.message);
 
-            // Se foi a última tentativa, retorna o erro
             if (tentativa === tentativasMaximas) {
                 return { erro: 'Não foi possível estruturar o pedido devido a instabilidade na IA.' };
             }
 
-            // Espera 2 segundos antes de tentar novamente
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Aumente de 2000 para 5000 (espera 5 segundos antes da próxima tentativa)
+            await new Promise(resolve => setTimeout(resolve, 5000));
         }
     }
 }
