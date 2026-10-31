@@ -150,7 +150,7 @@ async function processarPedidoComIA(textoCliente, tentativasMaximas = 3) {
     for (let tentativa = 1; tentativa <= tentativasMaximas; tentativa++) {
         try {
             const response = await ai.models.generateContent({
-                model: 'gemini-3.8-flash',
+                model: 'gemini-3.8-pro',
                 contents: prompt,
                 config: { responseMimeType: 'application/json' }
             });
