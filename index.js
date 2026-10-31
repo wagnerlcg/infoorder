@@ -5,6 +5,21 @@ const FormData = require('form-data');
 
 const app = express();
 
+app.get('/api/stream-pedidos', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    // Adicione estas duas linhas vitais para o Nginx/Easypanel:
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    clientesCozinha.push(res);
+
+    req.on('close', () => {
+        clientesCozinha = clientesCozinha.filter(client => client !== res);
+    });
+});
+
 process.on('uncaughtException', (err) => {
     console.error('Erro não tratado:', err);
 });
@@ -55,13 +70,13 @@ app.post('/webhook/whatsapp', async (req, res) => {
 
         if (data.event === 'messages.upsert') {
             const messageData = data.data;
-            
+
             if (messageData.key && messageData.key.fromMe) {
                 return res.status(200).send({ status: 'ignored_own_message' });
             }
 
             const senderPhone = messageData.key?.remoteJid;
-            const messageType = messageData.messageType; 
+            const messageType = messageData.messageType;
             let textoParaProcessar = "";
 
             if (messageType === 'conversation' || messageType === 'extendedTextMessage') {
@@ -157,4 +172,14 @@ app.get('/health', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor rodando na porta ${PORT}`);
+});
+
+// Opcional: Enviar um ping a cada 25 segundos para manter o proxy vivo
+const intervalId = setInterval(() => {
+    res.write(': ping\n\n');
+}, 25000);
+
+req.on('close', () => {
+    clearInterval(intervalId);
+    clientesCozinha = clientesCozinha.filter(client => client !== res);
 });
