@@ -14,6 +14,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Servir os arquivos estáticos da Cozinha (Frontend)
 app.use(express.static('public'));
