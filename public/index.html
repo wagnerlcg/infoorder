@@ -57,21 +57,42 @@
         // const evtSource = new EventSource('/api/stream-pedidos');
         const evtSource = new EventSource('https://pedepelozap.infosystem.pro/api/stream-pedidos');
 
+        // Quando a conexão dá certo (Bolinha Verde)
         evtSource.onopen = function () {
             console.log("Conexão SSE estabelecida com sucesso!");
 
-            // Altere aqui para o ID ou classe do seu elemento HTML de status:
-            const statusDot = document.getElementById('status-indicator'); // ou a classe da bolinha
+            const statusDot = document.getElementById('status-conexao');
+            const statusText = document.getElementById('status-texto');
+
             if (statusDot) {
-                statusDot.style.backgroundColor = '#22c55e'; // Cor verde
-                statusDot.innerText = 'Sistema Conectado';
+                statusDot.classList.remove('bg-red-500');
+                statusDot.classList.add('bg-green-500');
+            }
+            if (statusText) {
+                statusText.innerText = "Sistema Conectado";
+                statusText.classList.remove('text-gray-400');
+                statusText.classList.add('text-green-500'); // Opcional: deixa o texto verde também
             }
         };
 
-        evtSource.onerror = function (err) {
-            console.error("Erro na conexão SSE:", err);
-            // Se cair, o navegador tenta reconectar sozinho, mas logamos para ver se há falha de CORS ou SSL
+        // Quando a conexão dá certo (Bolinha Verde)
+        evtSource.onopen = function () {
+            console.log("Conexão SSE estabelecida com sucesso!");
+
+            const statusDot = document.getElementById('status-conexao');
+            const statusText = document.getElementById('status-texto');
+
+            if (statusDot) {
+                statusDot.classList.remove('bg-red-500');
+                statusDot.classList.add('bg-green-500');
+            }
+            if (statusText) {
+                statusText.innerText = "Sistema Conectado";
+                statusText.classList.remove('text-gray-400');
+                statusText.classList.add('text-green-500'); // Opcional: deixa o texto verde também
+            }
         };
+
         evtSource.onmessage = (event) => {
             const pedido = JSON.parse(event.data);
             adicionarCardPedido(pedido);
