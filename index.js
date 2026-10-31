@@ -9,13 +9,18 @@ app.get('/api/stream-pedidos', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    // Adicione estas duas linhas vitais para o Nginx/Easypanel:
-    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('X-Accel-Buffering', 'no'); // Essencial para Nginx/Easypanel
     res.setHeader('Access-Control-Allow-Origin', '*');
 
     clientesCozinha.push(res);
 
+    // Envia um ping a cada 20 segundos para manter a conexão viva no proxy
+    const keepAlive = setInterval(() => {
+        res.write(': ping\n\n');
+    }, 20000);
+
     req.on('close', () => {
+        clearInterval(keepAlive);
         clientesCozinha = clientesCozinha.filter(client => client !== res);
     });
 });
