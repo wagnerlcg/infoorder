@@ -67,25 +67,42 @@ app.post('/webhook/whatsapp', async (req, res) => {
         if (data.event === 'messages.upsert') {
             const messageData = data.data;
 
+            // ATENÇÃO: Se o atendente enviar o print usando O MESMO celular que está 
+            // conectado no sistema (para um grupo, por exemplo), remova este bloco de bloqueio.
             if (messageData.key && messageData.key.fromMe) {
                 return res.status(200).send({ status: 'ignored_own_message' });
             }
 
             const messageType = messageData.messageType;
             let textoParaProcessar = "";
+            let imagemBase64 = null;
 
-            if (messageType === 'conversation' || messageType === 'extendedTextMessage') {
-                textoParaProcessar = messageData.message?.conversation || messageData.message?.extendedTextMessage?.text;
+            // 1. Extrai o texto (seja uma mensagem normal ou a legenda do print)
+            if (messageData.message?.conversation) {
+                textoParaProcessar = messageData.message.conversation;
+            } else if (messageData.message?.extendedTextMessage?.text) {
+                textoParaProcessar = messageData.message.extendedTextMessage.text;
+            } else if (messageData.message?.imageMessage?.caption) {
+                textoParaProcessar = messageData.message.imageMessage.caption;
             } else if (messageType === 'audioMessage') {
                 const audioUrl = messageData.message?.audioMessage?.url || messageData.audioUrl;
-                if (audioUrl) {
-                    textoParaProcessar = await transcreverAudioWhisper(audioUrl);
+                if (audioUrl) textoParaProcessar = await transcreverAudioWhisper(audioUrl);
+            }
+
+            // 2. Extrai a imagem do print
+            if (messageType === 'imageMessage') {
+                // Captura o Base64 enviado pela Evolution API
+                imagemBase64 = messageData.base64 || messageData.message?.base64 || data.base64;
+
+                if (!imagemBase64) {
+                    console.log("⚠️ Print recebido, mas o Base64 está vazio. Ative o envio de Base64 no webhook da Evolution API.");
                 }
             }
 
-            if (textoParaProcessar) {
-                console.log(`Texto para análise: "${textoParaProcessar}"`);
-                const pedidoEstruturado = await processarPedidoComIA(textoParaProcessar);
+            // 3. Se houver texto ou imagem, envia para o Gemini
+            if (textoParaProcessar || imagemBase64) {
+                console.log(`Analisando envio. Tem legenda/texto? ${!!textoParaProcessar} | Tem print? ${!!imagemBase64}`);
+                const pedidoEstruturado = await processarPedidoComIA(textoParaProcessar, imagemBase64);
                 console.log("Pedido estruturado:", JSON.stringify(pedidoEstruturado, null, 2));
 
                 enviarParaCozinha(pedidoEstruturado);
@@ -98,7 +115,6 @@ app.post('/webhook/whatsapp', async (req, res) => {
         return res.status(500).send({ error: 'Internal Server Error' });
     }
 });
-
 // Transcrição de Áudio
 async function transcreverAudioWhisper(audioUrl) {
     try {
@@ -124,13 +140,14 @@ async function transcreverAudioWhisper(audioUrl) {
     }
 }
 
-// Processamento com IA (Gemini) com sistema de Retry (Tentativas automáticas)
-async function processarPedidoComIA(textoCliente, tentativasMaximas = 3) {
+// Processamento com IA (Gemini) com suporte a Imagens (Prints)
+async function processarPedidoComIA(textoCliente, imagemBase64 = null, tentativasMaximas = 3) {
     const prompt = `
         Você é um assistente especialista em extrair pedidos de delivery.
-        Analise a mensagem abaixo e extraia estritamente no formato JSON:
+        Analise a imagem da conversa (print) de WhatsApp e/ou o texto abaixo.
+        Extraia estritamente no formato JSON as seguintes informações do pedido:
         {
-          "cliente_nome": "Nome se mencionado, senão null",
+          "cliente_nome": "Nome do cliente se mencionado, senão null",
           "itens": [
             {
               "quantidade": 1,
@@ -139,21 +156,35 @@ async function processarPedidoComIA(textoCliente, tentativasMaximas = 3) {
             }
           ],
           "tipo_pedido": "delivery ou retirada",
-          "endereco_entrega": "Endereço completo ou null",
+          "endereco_entrega": "Endereço completo (Rua, número, bairro, referência) ou null se for retirada",
           "forma_pagamento": "Dinheiro, Pix, Cartão ou null",
           "troco_para": "Valor se precisar de troco, senão null"
         }
-
-        Mensagem do cliente: "${textoCliente}"
     `;
 
-    // ... dentro da função processarPedidoComIA ...
+    // Monta o "pacote" de envio misturando texto e imagem
+    const parts = [{ text: prompt }];
+
+    if (textoCliente) {
+        parts.push({ text: `\nLegenda/Mensagem: "${textoCliente}"` });
+    }
+
+    if (imagemBase64) {
+        parts.push({
+            inlineData: {
+                data: imagemBase64,
+                mimeType: 'image/jpeg' // O Gemini interpreta tanto jpg quanto png com esse mimeType
+            }
+        });
+    }
+
+    const contentsConfig = [{ role: 'user', parts: parts }];
 
     for (let tentativa = 1; tentativa <= tentativasMaximas; tentativa++) {
         try {
             const response = await ai.models.generateContent({
-                model: 'gemini-3.8-flash', // Volte para o flash, que é o modelo correto
-                contents: prompt,
+                model: 'gemini-3.8-flash',
+                contents: contentsConfig, // Envia o pacote multimodal
                 config: { responseMimeType: 'application/json' }
             });
 
@@ -165,7 +196,6 @@ async function processarPedidoComIA(textoCliente, tentativasMaximas = 3) {
                 return { erro: 'Não foi possível estruturar o pedido devido a instabilidade na IA.' };
             }
 
-            // Aumente de 2000 para 5000 (espera 5 segundos antes da próxima tentativa)
             await new Promise(resolve => setTimeout(resolve, 5000));
         }
     }
