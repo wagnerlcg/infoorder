@@ -59,7 +59,13 @@
 
         evtSource.onopen = function () {
             console.log("Conexão SSE estabelecida com sucesso!");
-            // Aqui você pode mudar a bolinha para verde visualmente
+
+            // Altere aqui para o ID ou classe do seu elemento HTML de status:
+            const statusDot = document.getElementById('status-indicator'); // ou a classe da bolinha
+            if (statusDot) {
+                statusDot.style.backgroundColor = '#22c55e'; // Cor verde
+                statusDot.innerText = 'Sistema Conectado';
+            }
         };
 
         evtSource.onerror = function (err) {
