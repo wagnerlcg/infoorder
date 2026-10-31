@@ -124,43 +124,51 @@ async function transcreverAudioWhisper(audioUrl) {
     }
 }
 
-// Processamento com IA (Gemini)
-async function processarPedidoComIA(textoCliente) {
-    try {
-        const prompt = `
-            Você é um assistente especialista em extrair pedidos de delivery.
-            Analise a mensagem abaixo e extraia estritamente no formato JSON:
+// Processamento com IA (Gemini) com sistema de Retry (Tentativas automáticas)
+async function processarPedidoComIA(textoCliente, tentativasMaximas = 3) {
+    const prompt = `
+        Você é um assistente especialista em extrair pedidos de delivery.
+        Analise a mensagem abaixo e extraia estritamente no formato JSON:
+        {
+          "cliente_nome": "Nome se mencionado, senão null",
+          "itens": [
             {
-              "cliente_nome": "Nome se mencionado, senão null",
-              "itens": [
-                {
-                  "quantidade": 1,
-                  "produto": "Nome do produto",
-                  "observacao": "Detalhes como sem cebola, etc ou string vazia"
-                }
-              ],
-              "tipo_pedido": "delivery ou retirada",
-              "endereco_entrega": "Endereço completo ou null",
-              "forma_pagamento": "Dinheiro, Pix, Cartão ou null",
-              "troco_para": "Valor se precisar de troco, senão null"
+              "quantidade": 1,
+              "produto": "Nome do produto",
+              "observacao": "Detalhes como sem cebola, etc ou string vazia"
+            }
+          ],
+          "tipo_pedido": "delivery ou retirada",
+          "endereco_entrega": "Endereço completo ou null",
+          "forma_pagamento": "Dinheiro, Pix, Cartão ou null",
+          "troco_para": "Valor se precisar de troco, senão null"
+        }
+
+        Mensagem do cliente: "${textoCliente}"
+    `;
+
+    for (let tentativa = 1; tentativa <= tentativasMaximas; tentativa++) {
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-3.8-flash',
+                contents: prompt,
+                config: { responseMimeType: 'application/json' }
+            });
+
+            return JSON.parse(response.text);
+        } catch (error) {
+            console.error(`Erro no Gemini (Tentativa ${tentativa}/${tentativasMaximas}):`, error.message);
+
+            // Se foi a última tentativa, retorna o erro
+            if (tentativa === tentativasMaximas) {
+                return { erro: 'Não foi possível estruturar o pedido devido a instabilidade na IA.' };
             }
 
-            Mensagem do cliente: "${textoCliente}"
-        `;
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash', // <-- Mude para 3.8
-            contents: prompt,
-            config: { responseMimeType: 'application/json' }
-        });
-
-        return JSON.parse(response.text);
-    } catch (error) {
-        console.error('Erro no Gemini:', error);
-        return { erro: 'Não foi possível estruturar o pedido' };
+            // Espera 2 segundos antes de tentar novamente
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
     }
 }
-
 // Rota de Health Check
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'online', timestamp: new Date() });
