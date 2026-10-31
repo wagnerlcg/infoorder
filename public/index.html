@@ -93,59 +93,31 @@
             }
         };
 
-        evtSource.onmessage = (event) => {
+        evtSource.onmessage = function (event) {
+            // Se a mensagem for apenas um ping de segurança, ignorar
+            if (event.data.trim() === 'ping') return;
+
             const pedido = JSON.parse(event.data);
-            adicionarCardPedido(pedido);
-        };
 
-        function adicionarCardPedido(pedido) {
-            // Remove mensagem de "vazio" se houver
-            const cardId = 'pedido-' + Date.now();
-
-            let itensHtml = '';
-            if (pedido.itens && Array.isArray(pedido.itens)) {
-                itensHtml = pedido.itens.map(item => `
-                    <li class="flex justify-between border-b border-gray-700/50 py-1">
-                        <span><b>${item.quantidade}x</b> ${item.produto}</span>
-                        <span class="text-gray-400 text-xs italic">${item.observacao || ''}</span>
-                    </li>
-                `).join('');
-            }
-
-            const cardHTML = `
-                <div id="${cardId}" class="ticket-impressao bg-gray-800 border border-gray-700 rounded-xl p-5 shadow-lg flex flex-col justify-between">
-                    <div>
-                        <div class="flex justify-between items-start mb-3">
-                            <h3 class="font-bold text-lg text-orange-400">${pedido.cliente_nome || 'Cliente WhatsApp'}</h3>
-                            <span class="bg-orange-500/20 text-orange-400 text-xs px-2.5 py-1 rounded-full font-medium uppercase">${pedido.tipo_pedido || 'delivery'}</span>
-                        </div>
-                        
-                        <div class="text-sm text-gray-300 mb-4 space-y-1">
-                            <p>📍 ${pedido.endereco_entrega || 'Retirada no balcão'}</p>
-                            <p>💳 Pagamento: <span class="text-white font-semibold">${pedido.forma_pagamento || 'Não informado'}</span> ${pedido.troco_para ? `(Troco para: R$ ${pedido.troco_para})` : ''}</p>
-                        </div>
-
-                        <div class="border-t border-gray-700 pt-3 mb-4">
-                            <p class="text-xs text-gray-400 uppercase font-bold mb-2">Itens do Pedido:</p>
-                            <ul class="space-y-2 text-sm">
-                                ${itensHtml}
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div class="flex gap-2 mt-4 no-print">
-                        <button onclick="window.print()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm font-medium transition">
-                            🖨️ Imprimir
-                        </button>
-                        <button onclick="document.getElementById('${cardId}').remove()" class="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg text-sm font-medium transition">
-                            ✅ Concluir
-                        </button>
-                    </div>
+            // Construir o HTML dos itens garantindo a leitura de pedido.itens
+            let itensHTML = '';
+            if (pedido.itens && pedido.itens.length > 0) {
+                pedido.itens.forEach(item => {
+                    itensHTML += `
+                <div class="mb-2">
+                    <span class="font-bold text-orange-400">${item.quantidade || 1}x</span> 
+                    <span class="text-white ml-1">${item.produto}</span>
+                    ${item.observacao ? `<div class="text-sm text-gray-400 ml-6">- ${item.observacao}</div>` : ''}
                 </div>
             `;
+                });
+            } else {
+                itensHTML = '<p class="text-sm text-gray-500 italic">Nenhum item identificado pela IA.</p>';
+            }
 
-            container.insertAdjacentHTML('afterbegin', cardHTML);
-        }
+            // Inserir o cartão no painel
+            // ... (o seu código existente que cria a div do cartão e injeta a variável itensHTML na secção "ITENS DO PEDIDO:")
+        };
     </script>
 </body>
 
