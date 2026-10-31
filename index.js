@@ -5,26 +5,7 @@ const FormData = require('form-data');
 
 const app = express();
 
-app.get('/api/stream-pedidos', (req, res) => {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Essencial para Nginx/Easypanel
-    res.setHeader('Access-Control-Allow-Origin', '*');
-
-    clientesCozinha.push(res);
-
-    // Envia um ping a cada 20 segundos para manter a conexão viva no proxy
-    const keepAlive = setInterval(() => {
-        res.write(': ping\n\n');
-    }, 20000);
-
-    req.on('close', () => {
-        clearInterval(keepAlive);
-        clientesCozinha = clientesCozinha.filter(client => client !== res);
-    });
-});
-
+// Tratamento de erros globais para evitar que o servidor caia
 process.on('uncaughtException', (err) => {
     console.error('Erro não tratado:', err);
 });
@@ -34,10 +15,10 @@ process.on('unhandledRejection', (reason, promise) => {
 
 app.use(express.json({ limit: '50mb' }));
 
-// Servir arquivos estáticos da pasta public (Painel da Cozinha)
+// Servir os arquivos estáticos da Cozinha (Frontend)
 app.use(express.static('public'));
 
-// Configuração de CORS para evitar qualquer bloqueio
+// Configuração de CORS
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -55,8 +36,7 @@ app.get('/api/stream-pedidos', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Essencial para Nginx/Easypanel
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('X-Accel-Buffering', 'no'); // Libera o proxy do Easypanel
 
     clientesCozinha.push(res);
 
@@ -65,19 +45,21 @@ app.get('/api/stream-pedidos', (req, res) => {
     });
 });
 
-// Envia ping a cada 25 segundos para todos os clientes conectados para evitar timeout no proxy
+// Envia ping periódico GLOBAL para manter a conexão aberta (Correção do erro res is not defined)
 setInterval(() => {
     clientesCozinha.forEach(client => {
         client.write(': ping\n\n');
     });
 }, 25000);
 
+// Função para enviar os pedidos reais para a tela
 function enviarParaCozinha(pedido) {
     clientesCozinha.forEach(client => {
         client.write(`data: ${JSON.stringify(pedido)}\n\n`);
     });
 }
 
+// Webhook do WhatsApp
 app.post('/webhook/whatsapp', async (req, res) => {
     try {
         const data = req.body;
@@ -89,7 +71,6 @@ app.post('/webhook/whatsapp', async (req, res) => {
                 return res.status(200).send({ status: 'ignored_own_message' });
             }
 
-            const senderPhone = messageData.key?.remoteJid;
             const messageType = messageData.messageType;
             let textoParaProcessar = "";
 
@@ -105,7 +86,7 @@ app.post('/webhook/whatsapp', async (req, res) => {
             if (textoParaProcessar) {
                 console.log(`Texto para análise: "${textoParaProcessar}"`);
                 const pedidoEstruturado = await processarPedidoComIA(textoParaProcessar);
-                console.log("Pedido estruturado pela IA:", JSON.stringify(pedidoEstruturado, null, 2));
+                console.log("Pedido estruturado:", JSON.stringify(pedidoEstruturado, null, 2));
 
                 enviarParaCozinha(pedidoEstruturado);
             }
@@ -118,6 +99,7 @@ app.post('/webhook/whatsapp', async (req, res) => {
     }
 });
 
+// Transcrição de Áudio
 async function transcreverAudioWhisper(audioUrl) {
     try {
         const responseAudio = await axios.get(audioUrl, { responseType: 'arraybuffer' });
@@ -137,27 +119,28 @@ async function transcreverAudioWhisper(audioUrl) {
 
         return responseWhisper.data.text;
     } catch (error) {
-        console.error('Erro ao transcrever áudio com Whisper:', error.response?.data || error.message);
+        console.error('Erro no Whisper:', error.message);
         return "";
     }
 }
 
+// Processamento com IA (Gemini)
 async function processarPedidoComIA(textoCliente) {
     try {
         const prompt = `
-            Você é um assistente de IA especialista em extrair pedidos de delivery (lanchonete/pizzaria) a partir de mensagens de WhatsApp.
-            Analise a mensagem abaixo e extraia as informações estritamente no formato JSON, seguindo este schema:
+            Você é um assistente especialista em extrair pedidos de delivery.
+            Analise a mensagem abaixo e extraia estritamente no formato JSON:
             {
-              "cliente_nome": "Nome do cliente se mencionado, senão null",
+              "cliente_nome": "Nome se mencionado, senão null",
               "itens": [
                 {
                   "quantidade": 1,
                   "produto": "Nome do produto",
-                  "observacao": "Detalhes como sem cebola, ponto, etc. ou string vazia"
+                  "observacao": "Detalhes como sem cebola, etc ou string vazia"
                 }
               ],
               "tipo_pedido": "delivery ou retirada",
-              "endereco_entrega": "Endereço completo se mencionado, senão null",
+              "endereco_entrega": "Endereço completo ou null",
               "forma_pagamento": "Dinheiro, Pix, Cartão ou null",
               "troco_para": "Valor se precisar de troco, senão null"
             }
@@ -168,32 +151,22 @@ async function processarPedidoComIA(textoCliente) {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-            }
+            config: { responseMimeType: 'application/json' }
         });
 
         return JSON.parse(response.text);
     } catch (error) {
-        console.error('Erro ao processar com o Gemini:', error);
+        console.error('Erro no Gemini:', error);
         return { erro: 'Não foi possível estruturar o pedido' };
     }
 }
 
+// Rota de Health Check
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'online', timestamp: new Date() });
 });
 
+// Inicialização do Servidor
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor rodando na porta ${PORT}`);
-});
-
-// Opcional: Enviar um ping a cada 25 segundos para manter o proxy vivo
-const intervalId = setInterval(() => {
-    res.write(': ping\n\n');
-}, 25000);
-
-req.on('close', () => {
-    clearInterval(intervalId);
-    clientesCozinha = clientesCozinha.filter(client => client !== res);
 });
