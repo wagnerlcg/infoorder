@@ -55,6 +55,8 @@ app.get('/api/stream-pedidos', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Essencial para Nginx/Easypanel
+    res.setHeader('Access-Control-Allow-Origin', '*');
 
     clientesCozinha.push(res);
 
@@ -62,6 +64,13 @@ app.get('/api/stream-pedidos', (req, res) => {
         clientesCozinha = clientesCozinha.filter(client => client !== res);
     });
 });
+
+// Envia ping a cada 25 segundos para todos os clientes conectados para evitar timeout no proxy
+setInterval(() => {
+    clientesCozinha.forEach(client => {
+        client.write(': ping\n\n');
+    });
+}, 25000);
 
 function enviarParaCozinha(pedido) {
     clientesCozinha.forEach(client => {
